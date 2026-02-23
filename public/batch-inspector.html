@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>HerbTrace · Batch Diagnostic Tool</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Sora:wght@300;500;700;800&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --green:   #1a7a4a;
+    --green-l: #e8f5ee;
+    --amber:   #d97706;
+    --amber-l: #fef3c7;
+    --red:     #dc2626;
+    --red-l:   #fee2e2;
+    --blue:    #2563eb;
+    --blue-l:  #eff6ff;
+    --bg:      #f4f7f5;
+    --card:    #ffffff;
+    --border:  #d1ddd6;
+    --text:    #1a2e24;
+    --muted:   #6b7c72;
+    --mono:    'JetBrains Mono', monospace;
+    --sans:    'Sora', sans-serif;
+  }
+
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 2rem 1rem;
+  }
+
+  .container { max-width: 820px; margin: 0 auto; }
+
+  /* Header */
+  .header {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 2rem;
+  }
+  .logo {
+    width: 40px; height: 40px; background: var(--green);
+    border-radius: 10px; display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+  }
+  .header h1 { font-size: 1.4rem; font-weight: 800; color: var(--green); }
+  .header p  { font-size: 0.8rem; color: var(--muted); margin-top: 1px; }
+
+  /* Search bar */
+  .search-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 16px; padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 2px 12px rgba(0,0,0,.05);
+  }
+  .search-card label {
+    display: block; font-size: 0.7rem; font-weight: 700;
+    letter-spacing: .08em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 8px;
+  }
+  .search-row { display: flex; gap: 10px; }
+  .search-row input {
+    flex: 1; padding: 12px 16px; border: 1.5px solid var(--border);
+    border-radius: 10px; font-family: var(--mono); font-size: 1rem;
+    outline: none; transition: border-color .15s;
+    background: var(--bg);
+  }
+  .search-row input:focus { border-color: var(--green); }
+  .btn {
+    padding: 12px 24px; background: var(--green); color: #fff;
+    border: none; border-radius: 10px; font-family: var(--sans);
+    font-weight: 700; font-size: 0.9rem; cursor: pointer;
+    transition: background .15s;
+  }
+  .btn:hover { background: #155c38; }
+  .btn:disabled { background: #9ca3af; cursor: not-allowed; }
+
+  /* Info box */
+  .info-box {
+    font-size: 0.78rem; color: var(--muted); margin-top: 12px;
+    padding: 10px 14px; background: var(--green-l);
+    border-radius: 8px; border-left: 3px solid var(--green);
+    line-height: 1.5;
+  }
+
+  /* Section card */
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 16px; margin-bottom: 1rem;
+    overflow: hidden;
+    box-shadow: 0 2px 12px rgba(0,0,0,.04);
+  }
+  .card-header {
+    display: flex; align-items: center; gap: 10px;
+    padding: 14px 20px; border-bottom: 1px solid var(--border);
+    background: #fafcfb;
+  }
+  .card-header .dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .dot-green  { background: var(--green); }
+  .dot-amber  { background: var(--amber); }
+  .dot-red    { background: var(--red); }
+  .dot-blue   { background: var(--blue); }
+  .dot-gray   { background: #9ca3af; }
+
+  .card-header h3 {
+    font-size: 0.85rem; font-weight: 700; flex: 1;
+    color: var(--text);
+  }
+  .card-header .badge {
+    font-family: var(--mono); font-size: 0.65rem;
+    padding: 3px 8px; border-radius: 20px; font-weight: 700;
+  }
+  .badge-green { background: var(--green-l); color: var(--green); }
+  .badge-amber { background: var(--amber-l); color: var(--amber); }
+  .badge-red   { background: var(--red-l);   color: var(--red);   }
+  .badge-blue  { background: var(--blue-l);  color: var(--blue);  }
+  .badge-gray  { background: #f3f4f6;        color: #6b7280;      }
+
+  .card-body { padding: 16px 20px; }
+
+  /* Row */
+  .row {
+    display: grid; grid-template-columns: 160px 1fr;
+    gap: 4px 16px; align-items: start;
+    padding: 8px 0; border-bottom: 1px solid #f0f4f1;
+    font-size: 0.83rem;
+  }
+  .row:last-child { border-bottom: none; }
+  .row-key {
+    font-size: 0.68rem; font-weight: 700; letter-spacing: .06em;
+    text-transform: uppercase; color: var(--muted);
+    padding-top: 2px;
+  }
+  .row-val { font-family: var(--mono); word-break: break-all; color: var(--text); }
+  .row-val.missing { color: var(--red); font-style: italic; font-family: var(--sans); }
+  .row-val.present { color: var(--green); }
+  .row-val a { color: var(--blue); text-decoration: underline; }
+
+  /* Raw JSON */
+  .json-block {
+    background: #0d1117; color: #e6edf3;
+    border-radius: 10px; padding: 16px;
+    font-family: var(--mono); font-size: 0.75rem;
+    line-height: 1.6; overflow-x: auto;
+    white-space: pre-wrap; word-break: break-all;
+    max-height: 320px; overflow-y: auto;
+    margin-top: 4px;
+  }
+  .json-key    { color: #79c0ff; }
+  .json-string { color: #a5d6ff; }
+  .json-number { color: #ffa657; }
+  .json-bool   { color: #ff7b72; }
+  .json-null   { color: #8b949e; }
+
+  /* Status alert */
+  .alert {
+    padding: 12px 16px; border-radius: 10px; font-size: 0.82rem;
+    margin-top: 8px; font-weight: 500;
+  }
+  .alert-red   { background: var(--red-l);   color: var(--red);   border: 1px solid #fca5a5; }
+  .alert-green { background: var(--green-l); color: var(--green); border: 1px solid #86efac; }
+  .alert-amber { background: var(--amber-l); color: var(--amber); border: 1px solid #fcd34d; }
+
+  /* Spinner */
+  .spinner {
+    display: inline-block; width: 18px; height: 18px;
+    border: 2.5px solid #fff; border-top-color: transparent;
+    border-radius: 50%; animation: spin .7s linear infinite;
+    vertical-align: middle; margin-right: 6px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .hidden { display: none; }
+  .divider { height: 1px; background: var(--border); margin: 4px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div class="logo">🌿</div>
+    <div>
+      <h1>HerbTrace · Batch Inspector</h1>
+      <p>Diagnostic tool — inspect raw blockchain &amp; IPFS data for any batch</p>
+    </div>
+  </div>
+
+  <!-- Search -->
+  <div class="search-card">
+    <label>Enter Batch ID to inspect</label>
+    <div class="search-row">
+      <input type="number" id="batchInput" placeholder="e.g. 105" min="1" />
+      <button class="btn" id="inspectBtn" onclick="inspect()">Inspect</button>
+    </div>
+    <div class="info-box">
+      This tool directly reads the blockchain and IPFS to show you exactly what data is stored.
+      It will reveal <strong>which fields are present or missing</strong> in the IPFS metadata JSON,
+      helping diagnose why location may not appear. <strong>MetaMask must be connected.</strong>
+    </div>
+  </div>
+
+  <div id="results" class="hidden">
+
+    <!-- 1. Blockchain Data -->
+    <div class="card">
+      <div class="card-header">
+        <div class="dot dot-blue"></div>
+        <h3>⛓ Blockchain Data</h3>
+        <span class="badge badge-blue" id="stageLabel">—</span>
+      </div>
+      <div class="card-body" id="blockchainRows"></div>
+    </div>
+
+    <!-- 2. IPFS Metadata JSON -->
+    <div class="card">
+      <div class="card-header">
+        <div class="dot" id="ipfsDot"></div>
+        <h3>📁 IPFS Metadata JSON</h3>
+        <span class="badge" id="ipfsBadge">—</span>
+      </div>
+      <div class="card-body">
+        <div id="ipfsAlert"></div>
+        <div id="ipfsFields" class="hidden"></div>
+        <div id="rawJsonSection" class="hidden">
+          <div style="font-size:.75rem;font-weight:700;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;margin:12px 0 6px">Raw JSON</div>
+          <div class="json-block" id="rawJson"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. Field Diagnosis -->
+    <div class="card">
+      <div class="card-header">
+        <div class="dot" id="diagDot"></div>
+        <h3>🔍 Field Diagnosis</h3>
+        <span class="badge" id="diagBadge">—</span>
+      </div>
+      <div class="card-body" id="diagBody"></div>
+    </div>
+
+    <!-- 4. Lab Report (if verified) -->
+    <div class="card hidden" id="labCard">
+      <div class="card-header">
+        <div class="dot dot-green"></div>
+        <h3>🧪 Lab Report (On-Chain)</h3>
+        <span class="badge badge-green">Blockchain Verified</span>
+      </div>
+      <div class="card-body" id="labRows"></div>
+    </div>
+
+  </div>
+
+  <div id="error" class="hidden"></div>
+</div>
+
+<script>
+// ─── Contract config ─────────────────────────────────────────────────────────
+const CONTRACT_ADDRESS = "0x437B1696B0E67a1430f5486583971D4520af93e1";
+const ABI = [
+  { inputs:[], name:"nextBatchId", outputs:[{type:"uint256",name:""}], stateMutability:"view", type:"function" },
+  { inputs:[{type:"uint256",name:""}], name:"batches",
+    outputs:[
+      {internalType:"uint256",type:"uint256",name:"id"},
+      {internalType:"string",type:"string",name:"metadataCID"},
+      {internalType:"address",type:"address",name:"farmer"},
+      {internalType:"uint8",type:"uint8",name:"stage"},
+      {internalType:"bool",type:"bool",name:"exists"}
+    ], stateMutability:"view", type:"function" },
+  { inputs:[{internalType:"uint256",type:"uint256",name:"_id"}], name:"getBatch",
+    outputs:[{components:[
+      {internalType:"uint256",type:"uint256",name:"id"},
+      {internalType:"string",type:"string",name:"metadataCID"},
+      {internalType:"address",type:"address",name:"farmer"},
+      {internalType:"uint8",type:"uint8",name:"stage"},
+      {internalType:"bool",type:"bool",name:"exists"}
+    ], internalType:"struct HerbChain.HerbBatch", type:"tuple",name:""}],
+    stateMutability:"view", type:"function" },
+  { inputs:[{internalType:"uint256",type:"uint256",name:"_id"}], name:"getLabReport",
+    outputs:[{components:[
+      {internalType:"string",type:"string",name:"reportIPFS"},
+      {internalType:"string",type:"string",name:"purity"},
+      {internalType:"string",type:"string",name:"notes"},
+      {internalType:"uint256",type:"uint256",name:"timestamp"},
+      {internalType:"address",type:"address",name:"labTech"}
+    ], internalType:"struct HerbChain.LabData", type:"tuple",name:""}],
+    stateMutability:"view", type:"function" }
+];
+
+const GATEWAYS = [
+  "https://dweb.link/ipfs/",
+  "https://ipfs.io/ipfs/",
+  "https://cloudflare-ipfs.com/ipfs/"
+];
+
+const STAGE_LABELS = ["Pending Lab","Lab Processing","Lab Verified","Shipped"];
+const STAGE_COLORS = { 0:"amber", 1:"amber", 2:"green", 3:"blue" };
+
+// ─── Fetch IPFS JSON trying multiple gateways ─────────────────────────────────
+async function fetchIPFS(cid) {
+  const clean = cid.replace("ipfs://","").trim();
+  for (const gw of GATEWAYS) {
+    try {
+      const res = await fetch(gw + clean, { signal: AbortSignal.timeout(8000) });
+      if (!res.ok) continue;
+      const ct = res.headers.get("content-type") || "";
+      if (ct.includes("image") || ct.includes("octet")) return { isImage: true, cid: clean };
+      try { return { json: await res.json(), cid: clean, gateway: gw }; }
+      catch { return { isImage: true, cid: clean }; } // binary, not JSON
+    } catch { continue; }
+  }
+  return null;
+}
+
+// ─── Syntax-highlight JSON ────────────────────────────────────────────────────
+function highlight(json) {
+  return JSON.stringify(json, null, 2)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, m => {
+      let cls = 'json-number';
+      if (/^"/.test(m)) cls = /:$/.test(m) ? 'json-key' : 'json-string';
+      else if (/true|false/.test(m)) cls = 'json-bool';
+      else if (/null/.test(m)) cls = 'json-null';
+      return `<span class="${cls}">${m}</span>`;
+    });
+}
+
+// ─── Build a row ──────────────────────────────────────────────────────────────
+function row(key, val, cls) {
+  const valStr = val === null || val === undefined ? '<span class="missing">⚠ missing / null</span>'
+    : cls === 'link' ? `<a href="${val}" target="_blank">${val}</a>`
+    : `<span class="${cls||''}">${val}</span>`;
+  return `<div class="row"><div class="row-key">${key}</div><div class="row-val">${valStr}</div></div>`;
+}
+
+// ─── Main inspect function ────────────────────────────────────────────────────
+async function inspect() {
+  const id = document.getElementById("batchInput").value.trim();
+  if (!id) return;
+
+  const btn = document.getElementById("inspectBtn");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Inspecting...';
+
+  document.getElementById("results").classList.add("hidden");
+  document.getElementById("error").classList.add("hidden");
+
+  try {
+    // 1. Connect wallet
+    if (!window.ethereum) throw new Error("MetaMask not found. Please install MetaMask.");
+    await window.ethereum.request({ method: "eth_requestAccounts" });
+
+    // 2. Load ethers dynamically (CDN)
+    if (!window.ethers) {
+      await new Promise((res, rej) => {
+        const s = document.createElement("script");
+        s.src = "https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js";
+        s.onload = res; s.onerror = rej;
+        document.head.appendChild(s);
+      });
+    }
+
+    const provider = new ethers.providers.Web3Provider(window.ethereum);
+    const signer = provider.getSigner();
+    const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
+
+    // 3. Read blockchain batch data — try getBatch() tuple first, fallback to batches()
+    let exists, stage, metadataCID, farmer;
+    try {
+      // Try getBatch() which returns a struct tuple (more reliable decode)
+      const batch = await contract.getBatch(id);
+      exists      = batch.exists;
+      stage       = Number(batch.stage);
+      metadataCID = batch.metadataCID;
+      farmer      = batch.farmer;
+    } catch(e1) {
+      try {
+        // Fallback to direct batches() mapping
+        const b = await contract.batches(id);
+        exists      = b[4] !== undefined ? b[4] : b.exists;
+        stage       = Number(b[3] !== undefined ? b[3] : b.stage);
+        metadataCID = b[1] !== undefined ? b[1] : b.metadataCID;
+        farmer      = b[2] !== undefined ? b[2] : b.farmer;
+      } catch(e2) {
+        throw new Error("Could not read batch data. Contract ABI mismatch or batch does not exist. (" + e2.message + ")");
+      }
+    }
+
+    if (!exists) {
+      showError(`Batch #${id} does not exist on the blockchain.`);
+      return;
+    }
+
+    // ── Blockchain card ──
+    const stageNum = typeof stage === 'object' && stage.toNumber ? stage.toNumber() : Number(stage);
+    const stageLabel = STAGE_LABELS[Math.min(stageNum, 3)] || "Unknown";
+    const stageColor2 = STAGE_COLORS[Math.min(stageNum, 3)] || "gray";
+    
+    document.getElementById("stageLabel").textContent   = stageLabel;
+    document.getElementById("stageLabel").className     = `badge badge-${stageColor2}`;
+    document.getElementById("blockchainRows").innerHTML =
+      row("Batch ID",      id,          "present")  +
+      row("Stage",         `${stageNum} (${stageLabel})`, stageColor2 === "green" ? "present" : "") +
+      row("Farmer Address", farmer,     "") +
+      row("metadataCID",   metadataCID, "present") +
+      `<div style="margin-top:8px">
+        <a href="https://dweb.link/ipfs/${metadataCID}" target="_blank" 
+           style="font-size:.75rem;color:var(--blue);font-family:var(--mono)">
+          → Open raw IPFS file for this CID
+        </a>
+      </div>`;
+
+    // ── IPFS metadata ──
+    document.getElementById("ipfsAlert").innerHTML = `<div class="alert alert-amber">⏳ Fetching IPFS metadata for CID: <code>${metadataCID}</code>...</div>`;
+    document.getElementById("results").classList.remove("hidden");
+
+    const ipfsResult = await fetchIPFS(metadataCID);
+
+    if (!ipfsResult) {
+      setIPFSStatus("red","⚠ Could not fetch");
+      document.getElementById("ipfsAlert").innerHTML =
+        `<div class="alert alert-red">❌ Could not fetch IPFS data. The CID may be unpinned, or all gateways timed out.<br>
+        <a href="https://dweb.link/ipfs/${metadataCID}" target="_blank" style="color:var(--blue)">Try opening directly →</a></div>`;
+    } else if (ipfsResult.isImage) {
+      setIPFSStatus("amber","⚠ CID is an image, not JSON");
+      document.getElementById("ipfsAlert").innerHTML =
+        `<div class="alert alert-amber">⚠ This CID points to an <strong>image file, not a JSON metadata file</strong>.<br>
+        This means the batch was created with an older flow where only the image CID was stored on-chain.<br>
+        <strong>Location, harvest date, etc. are unavailable for this batch.</strong></div>`;
+      showDiag(null, false, metadataCID);
+    } else {
+      const json = ipfsResult.json;
+      setIPFSStatus("green","✓ JSON found");
+      document.getElementById("ipfsAlert").innerHTML =
+        `<div class="alert alert-green">✅ Valid JSON metadata fetched from IPFS via ${ipfsResult.gateway}</div>`;
+
+      // Show fields
+      const fieldsDiv = document.getElementById("ipfsFields");
+      fieldsDiv.classList.remove("hidden");
+
+      // Normalize
+      const norm = {
+        name:        json.name        || json.cropName    || null,
+        location:    json.location    || json.farmLocation || json.city || null,
+        harvestDate: json.harvestDate || json.date         || null,
+        imageCID:    json.imageCID    || json.imagehash    || json.image || null,
+        farmerName:  json.farmerName  || json.farmer_name  || null,
+      };
+
+      fieldsDiv.innerHTML =
+        "<div style='font-size:.75rem;font-weight:700;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px'>Recognized Fields</div>" +
+        row("name",        norm.name,        norm.name        ? "present" : null) +
+        row("location",    norm.location,    norm.location    ? "present" : null) +
+        row("harvestDate", norm.harvestDate, norm.harvestDate ? "present" : null) +
+        row("imageCID",    norm.imageCID,    norm.imageCID    ? "present" : null) +
+        row("farmerName",  norm.farmerName,  norm.farmerName  ? "present" : null);
+
+      // Raw JSON  
+      const rawDiv = document.getElementById("rawJsonSection");
+      rawDiv.classList.remove("hidden");
+      document.getElementById("rawJson").innerHTML = highlight(json);
+
+      showDiag(norm, true, metadataCID);
+    }
+
+    // ── Lab report ──
+    if (stageNum >= 2) {
+      try {
+        const report = await contract.getLabReport(id);
+        if (report && report.purity) {
+          document.getElementById("labCard").classList.remove("hidden");
+          const ts = Number(report.timestamp) > 0
+            ? new Date(Number(report.timestamp)*1000).toLocaleString() : null;
+          document.getElementById("labRows").innerHTML =
+            row("purity",     report.purity,     "present") +
+            row("notes",      report.notes,      "present") +
+            row("reportIPFS", report.reportIPFS, report.reportIPFS !== "No_Report_Uploaded" ? "present" : null) +
+            row("timestamp",  ts,                ts ? "present" : null) +
+            row("labTech",    report.labTech,    "");
+        }
+      } catch (e) { /* no lab report */ }
+    }
+
+  } catch (err) {
+    showError(err.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = "Inspect";
+  }
+}
+
+function setIPFSStatus(color, label) {
+  document.getElementById("ipfsDot").className   = `dot dot-${color}`;
+  document.getElementById("ipfsBadge").textContent = label;
+  document.getElementById("ipfsBadge").className  = `badge badge-${color}`;
+}
+
+function showDiag(norm, hasJson, cid) {
+  const diagBody = document.getElementById("diagBody");
+  const diagDot  = document.getElementById("diagDot");
+  const diagBadge= document.getElementById("diagBadge");
+
+  if (!hasJson || !norm) {
+    diagDot.className   = "dot dot-red";
+    diagBadge.textContent = "Old batch format";
+    diagBadge.className = "badge badge-red";
+    diagBody.innerHTML  =
+      `<div class="alert alert-red" style="margin-bottom:12px">
+        <strong>Old batch — no metadata JSON on IPFS.</strong><br>
+        This batch was created before the new Farmer.jsx flow. Its CID points directly to an image, 
+        not a structured JSON. Location, harvest date, and other fields cannot be recovered for this batch.
+      </div>
+      <div class="alert alert-amber">
+        <strong>✅ Fix:</strong> New batches created with the updated Farmer.jsx will work correctly —
+        they upload a metadata JSON to Pinata (with location, date, etc.) and store <em>that CID</em> on-chain.
+      </div>`;
+    return;
+  }
+
+  const missing = Object.entries(norm).filter(([k,v]) => !v).map(([k]) => k);
+  const present = Object.entries(norm).filter(([k,v]) => !!v).map(([k]) => k);
+
+  if (missing.length === 0) {
+    diagDot.className   = "dot dot-green";
+    diagBadge.textContent = "All fields present ✓";
+    diagBadge.className = "badge badge-green";
+    diagBody.innerHTML  = `<div class="alert alert-green">✅ All expected metadata fields are present. Location and other data should display correctly in the app.</div>`;
+  } else {
+    diagDot.className   = "dot dot-amber";
+    diagBadge.textContent = `${missing.length} field(s) missing`;
+    diagBadge.className = "badge badge-amber";
+    diagBody.innerHTML  =
+      `<div class="alert alert-amber" style="margin-bottom:12px">
+        <strong>⚠ Partial metadata.</strong> JSON exists on IPFS but is missing some fields.<br>
+        <strong>Missing:</strong> ${missing.map(f=>`<code>${f}</code>`).join(", ")}<br>
+        <strong>Present:</strong> ${present.map(f=>`<code>${f}</code>`).join(", ")}
+      </div>
+      <div class="alert alert-blue" style="background:var(--blue-l);color:var(--blue);border:1px solid #93c5fd">
+        <strong>Likely cause:</strong> Member 4's Java server created this metadata JSON but used different 
+        field names (e.g. <code>farmLocation</code> instead of <code>location</code>). 
+        Check the Raw JSON above — if you see a location-like field with a different name, 
+        add it to the <code>fetchBatchMetadata</code> normalization in <code>pinata.js</code>.
+      </div>`;
+  }
+}
+
+function showError(msg) {
+  const el = document.getElementById("error");
+  el.innerHTML = `<div class="alert alert-red">❌ ${msg}</div>`;
+  el.classList.remove("hidden");
+  document.getElementById("results").classList.add("hidden");
+}
+
+// Allow Enter key
+document.addEventListener("DOMContentLoaded", () => {
+  document.getElementById("batchInput").addEventListener("keydown", e => {
+    if (e.key === "Enter") inspect();
+  });
+});     
+</script>
+</body>
+</html>
