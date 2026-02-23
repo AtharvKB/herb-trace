@@ -1,17 +1,109 @@
-# React + Vite
+# 🌿 HerbTrace
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+> Blockchain-powered traceability platform for Ayurvedic herbs — ensuring purity from farm to pharmacy.
 
-Currently, two official plugins are available:
+**Live on Sepolia Testnet** · Contract: `0x437B1696B0E67a1430f5486583971D4520af93e1`
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+---
 
-## React Compiler
+## 🧑‍🤝‍🧑 Team Roles
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+| Member | Role |
+|--------|------|
+| Member 1 | Smart Contract (Solidity + Hardhat, Sepolia deployment) |
+| **Member 2** | **Frontend (React + Vite) — this repo** |
+| Member 3 | QR Code generation |
+| Member 4 | IPFS & Backend (Java + Pinata) |
 
-## Expanding the ESLint configuration
+---
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
-# herb-trace
+## ✨ Features
+
+- 🌱 **Farmer Portal** — Register a herb batch; image uploaded to IPFS, metadata & batch ID written to blockchain
+- 🧪 **Lab Portal** — Lab tech selects a batch, enters purity %, notes, uploads PDF report → all stored permanently on-chain via `verifyBatch()`
+- 🚚 **Distributor Portal** — View verified batches with on-chain purity data, dispatch shipments
+- 🔍 **Track Product** — Anyone (no wallet needed) can scan a QR code or enter a batch ID to see the full supply chain history and quality certificate
+
+---
+
+## 🏗️ Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Frontend | React 19 + Vite 7 |
+| Styling | Tailwind CSS v4 |
+| Blockchain | Ethers.js v6, MetaMask |
+| Network | Sepolia Testnet |
+| IPFS | Pinata |
+| Routing | React Router v7 |
+
+---
+
+## 🚀 Getting Started
+
+### 1. Clone & Install
+```bash
+git clone https://github.com/AtharvKB/herb-trace.git
+cd herb-trace
+npm install
+```
+
+### 2. Set up environment variables
+Create a `.env` file in the project root:
+```bash
+VITE_PINATA_JWT=your_pinata_jwt_here
+```
+Get your JWT from [app.pinata.cloud/developers/api-keys](https://app.pinata.cloud/developers/api-keys)
+
+### 3. Run the dev server
+```bash
+npm run dev
+```
+Open [http://localhost:5173](http://localhost:5173)
+
+---
+
+## 🔗 Smart Contract
+
+| Property | Value |
+|----------|-------|
+| Network | Sepolia Testnet |
+| Address | `0x437B1696B0E67a1430f5486583971D4520af93e1` |
+| Current Batches | `#101` – `#105` |
+| Next Batch ID | `#106` |
+
+### Key Contract Functions
+| Function | Description |
+|----------|-------------|
+| `createBatch(metadataCID)` | Farmer registers a new herb batch |
+| `verifyBatch(id, pdfCID, purity, notes)` | Lab stores verification data on-chain |
+| `updateStage(id, stage)` | Distributor marks batch as shipped |
+| `batches(id)` | Read batch info |
+| `getLabReport(id)` | Read lab purity + PDF CID |
+
+---
+
+## 📁 Project Structure
+
+```
+src/
+├── pages/
+│   ├── Farmer.jsx        # Farmer harvest registration
+│   ├── Lab.jsx           # Lab batch overview
+│   ├── LabDashboard.jsx  # Lab verification form (writes to blockchain)
+│   ├── Distributor.jsx   # Distributor shipping portal
+│   └── Track.jsx         # Public product tracking (no wallet needed)
+├── utils/
+│   ├── contract.js       # Ethers.js contract helpers (read-only + signed)
+│   └── pinata.js         # IPFS upload/fetch helpers
+└── components/
+    └── Navbar.jsx
+```
+
+---
+
+## 📝 Notes for Team
+
+- **MetaMask** is only required for write actions (Lab verify, Distributor dispatch, Farmer submit). Tracking works without a wallet.
+- Farmer image upload calls **Member 4's Java server** at the configured ngrok URL — update `Farmer.jsx` if the URL changes.
+- Batch IDs start at **101** (seeded by Member 1 during deployment).
