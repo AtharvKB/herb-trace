@@ -1,15 +1,18 @@
 import React, { useState } from 'react';
 import axios from 'axios';
-import { Upload, MapPin, Calendar, Sprout, Loader2, CheckCircle } from 'lucide-react';
+import { Upload, MapPin, Calendar, Sprout, Loader2, CheckCircle, ChevronDown } from 'lucide-react';
 import { getContract } from '../utils/contract';
 import { uploadBatchMetadata } from '../utils/pinata';
 import { QRCodeCanvas } from 'qrcode.react';
 
 const CROPS = ["Ashwagandha", "Tulsi (Holy Basil)", "Turmeric", "Brahmi", "Neem", "Giloy"];
 
+const STEPS = ["Upload Image", "Store Metadata", "Sign Transaction", "Confirm on Chain"];
+
 const Farmer = () => {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
+  const [stepIndex, setStepIndex] = useState(-1);
   const [qrData, setQrData] = useState(null);
 
   const [formData, setFormData] = useState({
@@ -18,9 +21,17 @@ const Farmer = () => {
     harvestDate: '',
   });
   const [image, setImage] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
 
   const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
-  const handleImageChange = (e) => { if (e.target.files[0]) setImage(e.target.files[0]); };
+
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setImage(file);
+      setImagePreview(URL.createObjectURL(file));
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -30,9 +41,9 @@ const Farmer = () => {
 
     try {
       setLoading(true);
-
-      // Step 1: Upload image to IPFS via Member 4's Java server
+      setStepIndex(0);
       setStatus("Uploading image to IPFS...");
+
       const data = new FormData();
       data.append("image", image);
       data.append("name", formData.cropName);
@@ -52,35 +63,31 @@ const Farmer = () => {
 
       const imageCID = response.data.ipfsHash || response.data.hash || response.data.cid;
       if (!imageCID) throw new Error("Server did not return an IPFS Hash for the image!");
-      console.log("✅ Image CID:", imageCID);
 
-      // Step 2: Upload full batch metadata JSON to IPFS (via Pinata)
-      // This JSON will be stored on-chain as metadataCID
+      setStepIndex(1);
       setStatus("Uploading batch metadata to IPFS...");
       const metadataCID = await uploadBatchMetadata({
         cropName: formData.cropName,
         location: formData.location,
         harvestDate: formData.harvestDate,
-        imageCID: imageCID,
+        imageCID,
         farmerName: "Verified Farmer"
       });
-      console.log("✅ Metadata CID:", metadataCID);
 
-      // Step 3: Write metadataCID to blockchain (contract only takes 1 param)
+      setStepIndex(2);
       const contract = await getContract();
       if (!contract) throw new Error("Wallet not connected!");
 
       setStatus("Waiting for wallet signature...");
       const tx = await contract.createBatch(metadataCID);
 
+      setStepIndex(3);
       setStatus("Writing to blockchain...");
       await tx.wait();
 
-      // Step 4: Get the new batch ID
       const newContract = await getContract();
       const nextId = Number(await newContract.nextBatchId());
       const newBatchId = nextId - 1;
-      console.log("✅ Batch ID:", newBatchId);
 
       const trackingLink = `${window.location.origin}/track?id=${newBatchId}`;
       setQrData({ batchId: newBatchId, trackingLink });
@@ -92,6 +99,7 @@ const Farmer = () => {
     } finally {
       setLoading(false);
       setStatus("");
+      setStepIndex(-1);
     }
   };
 
@@ -99,65 +107,87 @@ const Farmer = () => {
     setQrData(null);
     setFormData({ cropName: 'Ashwagandha', location: '', harvestDate: '' });
     setImage(null);
+    setImagePreview(null);
   };
 
-  return (
-    <div className="max-w-2xl mx-auto mt-10 p-6 bg-white rounded-xl shadow-xl border border-green-100">
-      <h2 className="text-3xl font-bold text-green-800 mb-6 flex items-center">
-        <Sprout className="mr-2" /> Record New Harvest
-      </h2>
-
-      {qrData ? (
-        <div className="bg-green-50 border-2 border-green-400 rounded-xl p-8 text-center">
-          <div className="text-4xl mb-2">✅</div>
-          <h3 className="text-2xl font-bold text-green-800 mb-1">Batch Registered!</h3>
-          <p className="text-gray-600 mb-1">
-            Batch ID: <span className="font-mono font-bold text-green-700">#{qrData.batchId}</span>
+  // ── Success screen ─────────────────────────────────────────────────────────
+  if (qrData) {
+    return (
+      <div className="page-enter max-w-lg mx-auto px-4 py-16">
+        <div className="bg-white rounded-2xl border border-stone-100 shadow-sm p-8 text-center">
+          <div className="w-14 h-14 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4 glow-success">
+            <CheckCircle className="text-green-600" size={28} />
+          </div>
+          <h2 className="text-2xl font-bold text-stone-900 mb-1">Batch Registered!</h2>
+          <p className="text-stone-500 text-sm mb-1">
+            Batch <span className="font-mono font-semibold text-stone-700">#{qrData.batchId}</span>
           </p>
-          <p className="text-sm text-gray-500 mb-6">
-            Crop data stored on IPFS · Batch recorded on Blockchain
-          </p>
+          <p className="text-xs text-stone-400 mb-8">Crop data stored on IPFS · Recorded on Sepolia</p>
 
-          <div className="bg-white p-4 rounded-xl shadow-md inline-block mb-4">
-            <QRCodeCanvas value={qrData.trackingLink} size={200} level="H" includeMargin={true} />
+          <div className="bg-stone-50 rounded-xl p-4 inline-block mb-4 border border-stone-100">
+            <QRCodeCanvas value={qrData.trackingLink} size={180} level="H" includeMargin={false} />
           </div>
 
-          <p className="text-xs text-gray-400 break-all px-4 mb-6">{qrData.trackingLink}</p>
+          <p className="text-[11px] text-stone-400 break-all px-2 mb-8 font-mono">{qrData.trackingLink}</p>
 
-          <div className="flex gap-3 justify-center">
+          <div className="flex gap-3">
             <button
               onClick={() => window.open(qrData.trackingLink, '_blank')}
-              className="bg-green-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-green-700 transition shadow"
+              className="flex-1 bg-green-700 text-white py-2.5 rounded-xl font-semibold text-sm hover:bg-green-800 transition"
             >
-              🔍 Preview Tracking Page
+              Preview Tracking
             </button>
             <button
               onClick={reset}
-              className="bg-gray-100 text-gray-700 px-6 py-2 rounded-lg font-bold hover:bg-gray-200 transition"
+              className="flex-1 bg-white text-stone-700 border border-stone-200 py-2.5 rounded-xl font-semibold text-sm hover:bg-stone-50 transition"
             >
-              🔄 New Batch
+              New Batch
             </button>
           </div>
         </div>
-      ) : (
-        <form onSubmit={handleSubmit} className="space-y-5">
+      </div>
+    );
+  }
 
+  // ── Form ───────────────────────────────────────────────────────────────────
+  return (
+    <div className="page-enter max-w-5xl mx-auto px-4 py-10">
+      <div className="mb-8">
+        <h1 className="text-2xl font-bold text-stone-900">Record New Harvest</h1>
+        <p className="text-stone-500 text-sm mt-1">Register a batch on the blockchain — immutable and verifiable.</p>
+      </div>
+
+      <div className="grid md:grid-cols-5 gap-8">
+
+        {/* Left — Form */}
+        <form onSubmit={handleSubmit} className="md:col-span-3 space-y-5">
+
+          {/* Crop select */}
           <div>
-            <label className="block text-gray-700 font-semibold mb-2">Select Crop</label>
-            <select
-              name="cropName"
-              value={formData.cropName}
-              onChange={handleChange}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 outline-none"
-            >
-              {CROPS.map(c => <option key={c}>{c}</option>)}
-            </select>
+            <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wide mb-1.5">
+              Crop
+            </label>
+            <div className="relative">
+              <Sprout className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" size={16} />
+              <select
+                name="cropName"
+                value={formData.cropName}
+                onChange={handleChange}
+                className="w-full pl-9 pr-9 py-2.5 bg-white border border-stone-200 rounded-xl text-stone-800 text-sm appearance-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition"
+              >
+                {CROPS.map(c => <option key={c}>{c}</option>)}
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 pointer-events-none" size={15} />
+            </div>
           </div>
 
+          {/* Location */}
           <div>
-            <label className="block text-gray-700 font-semibold mb-2">Farm Location</label>
+            <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wide mb-1.5">
+              Farm Location
+            </label>
             <div className="relative">
-              <MapPin className="absolute left-3 top-3.5 text-gray-400" size={18} />
+              <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" size={16} />
               <input
                 type="text"
                 name="location"
@@ -165,60 +195,130 @@ const Farmer = () => {
                 value={formData.location}
                 onChange={handleChange}
                 required
-                className="w-full p-3 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 outline-none"
+                className="w-full pl-9 pr-4 py-2.5 bg-white border border-stone-200 rounded-xl text-stone-800 text-sm placeholder-stone-400 focus:ring-2 focus:ring-green-500 focus:border-transparent transition"
               />
             </div>
           </div>
 
+          {/* Harvest Date */}
           <div>
-            <label className="block text-gray-700 font-semibold mb-2">Harvest Date</label>
+            <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wide mb-1.5">
+              Harvest Date
+            </label>
             <div className="relative">
-              <Calendar className="absolute left-3 top-3.5 text-gray-400" size={18} />
+              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" size={16} />
               <input
                 type="date"
                 name="harvestDate"
                 value={formData.harvestDate}
                 onChange={handleChange}
                 required
-                className="w-full p-3 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 outline-none"
+                className="w-full pl-9 pr-4 py-2.5 bg-white border border-stone-200 rounded-xl text-stone-800 text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent transition"
               />
             </div>
           </div>
 
-          <div className="border-2 border-dashed border-green-300 rounded-xl p-6 text-center bg-green-50 hover:bg-green-100 transition cursor-pointer relative">
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleImageChange}
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-            />
-            <Upload className="mx-auto text-green-600 mb-2" size={36} />
-            {image ? (
-              <p className="text-green-700 font-medium flex items-center justify-center gap-2">
-                <CheckCircle size={16} /> {image.name}
-              </p>
-            ) : (
-              <p className="text-green-800 font-medium">Click to Upload Harvest Photo</p>
-            )}
-            <p className="text-xs text-gray-400 mt-1">JPG, PNG supported</p>
+          {/* Image upload */}
+          <div>
+            <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wide mb-1.5">
+              Harvest Photo
+            </label>
+            <label className={`relative flex flex-col items-center justify-center w-full h-36 border-2 border-dashed rounded-xl cursor-pointer transition-all ${image
+                ? 'border-green-400 bg-green-50'
+                : 'border-stone-200 bg-white hover:border-stone-300 hover:bg-stone-50'
+              }`}>
+              <input type="file" accept="image/*" onChange={handleImageChange} className="sr-only" />
+              {image ? (
+                <>
+                  <CheckCircle size={22} className="text-green-600 mb-2" />
+                  <p className="text-sm font-medium text-green-700">{image.name}</p>
+                  <p className="text-xs text-green-500 mt-0.5">Click to change</p>
+                </>
+              ) : (
+                <>
+                  <Upload size={22} className="text-stone-400 mb-2" />
+                  <p className="text-sm font-medium text-stone-600">Click to upload photo</p>
+                  <p className="text-xs text-stone-400 mt-0.5">JPG, PNG supported</p>
+                </>
+              )}
+            </label>
           </div>
+
+          {/* Progress steps (visible while loading) */}
+          {loading && (
+            <div className="bg-stone-50 rounded-xl border border-stone-100 p-4">
+              <div className="flex flex-col gap-2">
+                {STEPS.map((s, i) => (
+                  <div key={s} className={`flex items-center gap-3 text-sm transition-all ${i < stepIndex ? 'text-green-700' : i === stepIndex ? 'text-stone-900 font-medium' : 'text-stone-400'
+                    }`}>
+                    <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold ${i < stepIndex ? 'bg-green-100 text-green-700' :
+                        i === stepIndex ? 'bg-green-700 text-white' : 'bg-stone-200 text-stone-400'
+                      }`}>
+                      {i < stepIndex ? '✓' : i + 1}
+                    </div>
+                    {s}
+                    {i === stepIndex && <Loader2 size={13} className="animate-spin ml-auto text-green-600" />}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <button
             type="submit"
             disabled={loading}
-            className={`w-full font-bold py-4 rounded-xl shadow-lg flex justify-center items-center text-white transition text-lg ${
-              loading ? "bg-gray-400 cursor-not-allowed" : "bg-green-700 hover:bg-green-800"
-            }`}
+            className={`w-full py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-all shadow-sm ${loading
+                ? 'bg-stone-200 text-stone-400 cursor-not-allowed'
+                : 'bg-green-700 text-white hover:bg-green-800 hover:shadow-md'
+              }`}
           >
             {loading ? (
-              <><Loader2 className="animate-spin mr-2" />{status || "Processing..."}</>
+              <><Loader2 size={16} className="animate-spin" />{status || "Processing..."}</>
             ) : (
-              "Submit to Blockchain"
+              'Submit to Blockchain'
             )}
           </button>
-
         </form>
-      )}
+
+        {/* Right — Preview card */}
+        <div className="md:col-span-2 space-y-4">
+          <div className="bg-white rounded-2xl border border-stone-100 overflow-hidden shadow-sm">
+            <div className="h-44 bg-stone-100 relative">
+              {imagePreview ? (
+                <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <Upload size={28} className="text-stone-300" />
+                </div>
+              )}
+              <div className="absolute top-2 right-2">
+                <span className="bg-white/80 backdrop-blur-sm text-stone-600 text-[10px] font-semibold px-2 py-0.5 rounded-full border border-stone-200">
+                  Preview
+                </span>
+              </div>
+            </div>
+            <div className="p-4">
+              <p className="font-semibold text-stone-900 text-sm">{formData.cropName}</p>
+              <p className="text-xs text-stone-500 mt-0.5">{formData.location || 'No location set'}</p>
+              {formData.harvestDate && (
+                <p className="text-xs text-stone-400 mt-0.5">{formData.harvestDate}</p>
+              )}
+            </div>
+          </div>
+
+          {/* Info blurb */}
+          <div className="bg-green-50 rounded-xl border border-green-100 p-4">
+            <p className="text-xs font-semibold text-green-800 mb-1">What happens next?</p>
+            <ol className="text-xs text-green-700 space-y-1 list-decimal list-inside">
+              <li>Image uploaded to IPFS</li>
+              <li>Metadata stored via Pinata</li>
+              <li>Batch ID minted on Sepolia</li>
+              <li>QR code generated for tracking</li>
+            </ol>
+          </div>
+        </div>
+
+      </div>
     </div>
   );
 };

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Leaf } from 'lucide-react';
+import { Link, NavLink } from 'react-router-dom';
+import { Leaf, Wallet, ChevronDown } from 'lucide-react';
 
 const Navbar = () => {
   const [walletAddress, setWalletAddress] = useState("");
@@ -18,37 +18,45 @@ const Navbar = () => {
     }
   };
 
+  const navLinkClass = ({ isActive }) =>
+    `text-sm font-medium transition-colors duration-150 ${isActive
+      ? 'text-green-700'
+      : 'text-stone-500 hover:text-stone-900'
+    }`;
+
   return (
-    <nav className="bg-green-700 p-4 shadow-lg text-white sticky top-0 z-50">
-      <div className="container mx-auto flex justify-between items-center">
-        {/* Logo Section */}
-        <Link to="/" className="flex items-center space-x-2 font-bold text-xl hover:text-green-200 transition">
-          <Leaf className="w-8 h-8" />
-          <span>HerbTrace</span>
+    <nav className="bg-white/80 backdrop-blur-md border-b border-stone-200 sticky top-0 z-50">
+      <div className="max-w-7xl mx-auto px-6 flex items-center justify-between h-14">
+
+        {/* Logo */}
+        <Link to="/" className="flex items-center gap-2 font-semibold text-stone-900 hover:text-green-700 transition-colors">
+          <div className="w-7 h-7 bg-green-700 rounded-lg flex items-center justify-center">
+            <Leaf size={14} className="text-white" />
+          </div>
+          <span className="tracking-tight">HerbTrace</span>
         </Link>
 
-        {/* Navigation Links - Now includes Lab */}
-        <div className="hidden md:flex space-x-8 font-medium">
-          <Link to="/" className="hover:text-green-200 transition">Home</Link>
-          <Link to="/farmer" className="hover:text-green-200 transition">Farmer Portal</Link>
-          <Link to="/lab" className="hover:text-green-200 transition">Lab Portal</Link>
-          {/* Inside the links div */}
-<Link to="/distributor" className="hover:text-green-200 transition">Distributor</Link>
-          <Link to="/track" className="hover:text-green-200 transition">Track Product</Link>
+        {/* Nav links */}
+        <div className="hidden md:flex items-center gap-8">
+          <NavLink to="/" end className={navLinkClass}>Home</NavLink>
+          <NavLink to="/farmer" className={navLinkClass}>Farmer Portal</NavLink>
+          <NavLink to="/lab" className={navLinkClass}>Lab Portal</NavLink>
+          <NavLink to="/distributor" className={navLinkClass}>Distributor</NavLink>
+          <NavLink to="/track" className={navLinkClass}>Track</NavLink>
         </div>
 
-        {/* Connect Wallet Button */}
-        <button 
+        {/* Wallet */}
+        <button
           onClick={connectWallet}
-          className={`px-4 py-2 rounded-full font-semibold transition shadow-md ${
-            walletAddress 
-              ? "bg-green-900 text-green-100 cursor-default border border-green-600" 
-              : "bg-white text-green-700 hover:bg-green-50"
-          }`}
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-150 ${walletAddress
+              ? 'bg-green-50 text-green-700 border border-green-200 cursor-default'
+              : 'bg-green-700 text-white hover:bg-green-800 shadow-sm'
+            }`}
         >
-          {walletAddress 
-            ? `Connected: ${walletAddress.substring(0, 6)}...` 
-            : "Connect Wallet"}
+          <Wallet size={14} />
+          {walletAddress
+            ? `${walletAddress.substring(0, 6)}…${walletAddress.slice(-4)}`
+            : 'Connect Wallet'}
         </button>
       </div>
     </nav>
