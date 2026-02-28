@@ -1,250 +1,695 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { ethers } from 'ethers';
 import { BrowserRouter as Router, Routes, Route, Link, useSearchParams } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import Farmer from './pages/Farmer';
 import Track from './pages/Track';
 import Distributor from './pages/Distributor';
 import LabDashboard from './pages/LabDashboard';
-import {
-  Leaf, FlaskConical, Truck, Search,
-  ShieldCheck, HardDrive, QrCode,
-  ArrowRight, Github
-} from 'lucide-react';
-import heroBotanical from './assets/hero_botanical.png';
+import { getReadOnlyContract, BATCH_ID_START } from './utils/contract';
+import herbHeroBg from './assets/herb_hero_bg.png';
 import './App.css';
+import './landing.css';
+
+/* ─── Google Fonts ─────────────────────────────────────── */
+const FontLoader = () => (
+  <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Outfit:wght@400;500;600;700;800;900&display=swap');`}</style>
+);
 
 const TrackWrapper = () => {
   const [params] = useSearchParams();
   return <Track prefillId={params.get("id") || ""} />;
 };
 
-/* ── Portals data ─────────────────────────────── */
-const PORTALS = [
-  {
-    to: '/farmer',
-    icon: Leaf,
-    label: 'Farmer Portal',
-    desc: 'Register a new herb batch. Upload a harvest photo, enter location and date, then mint the batch on-chain.',
-    accent: 'text-green-700 bg-green-50 border-green-100',
-    cta: 'Create batch',
-    ctaCls: 'bg-green-700 text-white hover:bg-green-800',
-  },
-  {
-    to: '/lab',
-    icon: FlaskConical,
-    label: 'Lab Portal',
-    desc: 'Review pending batches, run quality analysis, record purity % and notes, and optionally attach a PDF report — all written to the smart contract.',
-    accent: 'text-blue-700 bg-blue-50 border-blue-100',
-    cta: 'Open dashboard',
-    ctaCls: 'bg-blue-600 text-white hover:bg-blue-700',
-  },
-  {
-    to: '/distributor',
-    icon: Truck,
-    label: 'Distributor',
-    desc: 'View lab-verified batches ready for dispatch. Mark a shipment as sent, updating the on-chain stage to "Shipped".',
-    accent: 'text-purple-700 bg-purple-50 border-purple-100',
-    cta: 'Manage shipments',
-    ctaCls: 'bg-purple-600 text-white hover:bg-purple-700',
-  },
-  {
-    to: '/track',
-    icon: Search,
-    label: 'Track a Product',
-    desc: 'Enter any batch ID to read its full history from the blockchain — farmer origin, lab report, purity score, and current stage.',
-    accent: 'text-stone-700 bg-stone-50 border-stone-200',
-    cta: 'Trace now',
-    ctaCls: 'bg-stone-800 text-white hover:bg-stone-900',
-  },
-];
+/* ═══════════════════════════════════════════════════════════
+   Canvas network animation (blockchain node graph)
+═══════════════════════════════════════════════════════════ */
+const HeroCanvas = () => {
+  const canvasRef = useRef(null);
 
-/* ── Tech stack items ─────────────────────────── */
-const TECH = [
-  { icon: ShieldCheck, label: 'Ethereum', sub: 'Sepolia testnet · Smart contract stores all batch & lab data on-chain' },
-  { icon: HardDrive, label: 'IPFS via Pinata', sub: 'Crop images and JSON metadata stored on a decentralised content-addressed network' },
-  { icon: QrCode, label: 'QR Codes', sub: 'Each registered batch generates a scannable link to its public tracking page' },
-];
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    let raf;
+    const nodes = [];
+    const NODE_COUNT = 55;
+    const MAX_DIST = 160;
 
-const Home = () => (
-  <div className="page-enter">
+    const resize = () => {
+      canvas.width = canvas.offsetWidth;
+      canvas.height = canvas.offsetHeight;
+    };
+    resize();
+    window.addEventListener('resize', resize);
 
-    {/* ── Hero ─────────────────────────────────────────────────── */}
-    <section className="relative overflow-hidden bg-white border-b border-stone-100 min-h-[80vh] flex items-center">
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_70%_at_70%_40%,_rgba(134,_239,_172,_0.18),_transparent)]" />
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_60%_at_20%_80%,_rgba(187,_247,_208,_0.1),_transparent)]" />
+    /* Seed nodes */
+    for (let i = 0; i < NODE_COUNT; i++) {
+      nodes.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        vx: (Math.random() - 0.5) * 0.4,
+        vy: (Math.random() - 0.5) * 0.4,
+        r: Math.random() * 2 + 1.5,
+        gold: Math.random() < 0.3,
+      });
+    }
 
-      <div className="max-w-6xl mx-auto px-6 py-16 md:py-20 relative z-10 w-full">
-        <div className="grid md:grid-cols-2 gap-12 items-center">
+    const draw = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-          {/* Text */}
-          <div>
-            <div className="inline-flex items-center gap-2 bg-stone-100 border border-stone-200 text-stone-600 text-xs font-semibold px-3 py-1 rounded-full mb-7">
-              <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-              Academic / Demo project · Ethereum Sepolia testnet
-            </div>
+      /* Update positions */
+      nodes.forEach(n => {
+        n.x += n.vx; n.y += n.vy;
+        if (n.x < 0 || n.x > canvas.width) n.vx *= -1;
+        if (n.y < 0 || n.y > canvas.height) n.vy *= -1;
+      });
 
-            <h1 className="text-5xl md:text-6xl font-bold text-stone-900 tracking-tight leading-[1.1] mb-5">
-              Herb supply chain
-              <span className="text-green-700"> on the blockchain</span>
-            </h1>
+      /* Draw edges */
+      for (let i = 0; i < nodes.length; i++) {
+        for (let j = i + 1; j < nodes.length; j++) {
+          const dx = nodes[i].x - nodes[j].x;
+          const dy = nodes[i].y - nodes[j].y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < MAX_DIST) {
+            const alpha = (1 - dist / MAX_DIST) * 0.35;
+            ctx.beginPath();
+            ctx.moveTo(nodes[i].x, nodes[i].y);
+            ctx.lineTo(nodes[j].x, nodes[j].y);
+            const grad = ctx.createLinearGradient(nodes[i].x, nodes[i].y, nodes[j].x, nodes[j].y);
+            grad.addColorStop(0, `rgba(16,163,74,${alpha})`);
+            grad.addColorStop(1, `rgba(13,148,136,${alpha})`);
+            ctx.strokeStyle = grad;
+            ctx.lineWidth = 0.8;
+            ctx.stroke();
+          }
+        }
+      }
 
-            <p className="text-lg text-stone-500 leading-relaxed mb-3 max-w-lg">
-              HerbTrace is a prototype system for recording and verifying Ayurvedic herb batches
-              across the supply chain — from farm registration through lab testing to distribution.
-            </p>
-            <p className="text-sm text-stone-400 leading-relaxed mb-10 max-w-lg">
-              Each step is written to a smart contract on the Ethereum Sepolia testnet.
-              Data is public, immutable, and readable by anyone with the batch ID.
-            </p>
+      /* Draw nodes */
+      nodes.forEach(n => {
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
+        if (n.gold) {
+          ctx.fillStyle = 'rgba(217,119,6,0.7)';
+          ctx.shadowBlur = 6;
+          ctx.shadowColor = 'rgba(217,119,6,0.5)';
+        } else {
+          ctx.fillStyle = 'rgba(22,163,74,0.55)';
+          ctx.shadowBlur = 0;
+        }
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      });
 
-            <div className="flex flex-wrap gap-3">
-              <Link to="/farmer"
-                className="flex items-center gap-2 bg-green-700 text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-green-800 transition-all shadow-sm hover:shadow-md text-sm">
-                <Leaf size={16} /> Record a Batch
-              </Link>
-              <Link to="/track"
-                className="flex items-center gap-2 bg-white text-stone-700 border border-stone-200 px-5 py-2.5 rounded-xl font-semibold hover:bg-stone-50 transition-all text-sm">
-                <Search size={16} /> Track a Product
-              </Link>
-            </div>
-          </div>
+      raf = requestAnimationFrame(draw);
+    };
+    draw();
 
-          {/* Botanical image in glass card */}
-          <div className="relative flex items-center justify-center">
-            <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-green-200/30 via-emerald-100/20 to-transparent blur-3xl scale-110" />
-            <div className="relative w-full max-w-md rounded-3xl overflow-hidden border border-white/60 shadow-xl"
-              style={{
-                background: 'rgba(255,255,255,0.45)',
-                backdropFilter: 'blur(20px)',
-                WebkitBackdropFilter: 'blur(20px)',
-              }}>
-              <img
-                src={heroBotanical}
-                alt="Illustration of Ayurvedic herbs — Ashwagandha, Tulsi, Turmeric"
-                className="w-full h-full object-cover mix-blend-multiply"
-                style={{ opacity: 0.9 }}
-              />
-              <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
-                <span className="inline-flex items-center gap-1.5 bg-white/70 backdrop-blur-sm border border-white/80 text-stone-500 text-[11px] font-medium px-3 py-1 rounded-full shadow-sm">
-                  Illustration · Ashwagandha · Tulsi · Turmeric
-                </span>
-              </div>
-            </div>
-          </div>
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', resize);
+    };
+  }, []);
 
+  return <canvas ref={canvasRef} className="lp-hero-canvas" />;
+};
+
+/* ═══════════════════════════════════════════════════════════
+   Animated counter hook
+═══════════════════════════════════════════════════════════ */
+const useCounter = (target, duration = 1800) => {
+  const [count, setCount] = useState(0);
+  const ref = useRef(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting) return;
+      observer.disconnect();
+      const start = performance.now();
+      const tick = (now) => {
+        const progress = Math.min((now - start) / duration, 1);
+        const ease = 1 - Math.pow(1 - progress, 3);
+        setCount(Math.floor(ease * target));
+        if (progress < 1) requestAnimationFrame(tick);
+        else setCount(target);
+      };
+      requestAnimationFrame(tick);
+    }, { threshold: 0.4 });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [target, duration]);
+  return [count, ref];
+};
+
+/* ═══════════════════════════════════════════════════════════
+   Stat card with counter + progress bar
+═══════════════════════════════════════════════════════════ */
+const StatCard = ({ emoji, target, suffix, label, cls, barCls, fillCls, loading }) => {
+  // Compute fill % proportionally (capped at 99% visually)
+  const fillPct = target > 0 ? `${Math.min(99, Math.round((target / (target * 1.1)) * 100))}%` : '10%';
+  const [count, ref] = useCounter(loading ? 0 : target);
+  const barFillRef = useRef(null);
+  useEffect(() => {
+    if (loading) return;
+    const el = ref.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting) return;
+      observer.disconnect();
+      if (barFillRef.current) {
+        barFillRef.current.style.setProperty('--fill', fillPct);
+        barFillRef.current.classList.add('animated');
+      }
+    }, { threshold: 0.4 });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [fillPct, ref, loading]);
+
+  return (
+    <div ref={ref} className={`lp-stat-card ${cls} lp-reveal`}>
+      <div className="lp-stat-icon">{emoji}</div>
+      <div className="lp-stat-number" style={{ minHeight: '3rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        {loading
+          ? <span style={{ fontSize: '1.2rem', color: 'var(--text-muted)', fontWeight: 400 }}>—</span>
+          : <>{count}{suffix}</>}
+      </div>
+      <p className="lp-stat-label">{label}</p>
+      <div className={`lp-stat-bar ${barCls}`}>
+        <div ref={barFillRef} className={`lp-stat-bar-fill ${fillCls}`} />
+      </div>
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════
+   Hook — fetch real on-chain stats
+═══════════════════════════════════════════════════════════ */
+const sleep = (ms) => new Promise(res => setTimeout(res, ms));
+
+const useChainStats = () => {
+  const [stats, setStats] = useState(null); // null = loading
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      try {
+        const contract = await getReadOnlyContract();
+
+        // 1) Get total batch count
+        const nextId = await contract.nextBatchId();
+        const total = Number(nextId) - BATCH_ID_START;
+
+        if (total <= 0) {
+          if (!cancelled) setStats({ total: 0, verified: 0, farmers: 0, shipped: 0 });
+          return;
+        }
+
+        // Show total immediately so user sees a number right away
+        if (!cancelled) setStats({ total, verified: 0, farmers: 0, shipped: 0 });
+
+        // 2) Fetch each batch sequentially with a tiny delay to avoid RPC rate-limits
+        const farmerSet = new Set();
+        let verifiedCount = 0;
+        let shippedCount = 0;
+
+        for (let i = BATCH_ID_START; i < Number(nextId); i++) {
+          if (cancelled) return;
+          try {
+            const b = await contract.batches(i);
+            if (b && b.exists) {
+              if (b.farmer && b.farmer !== ethers.ZeroAddress)
+                farmerSet.add(b.farmer.toLowerCase());
+              // stage: 0=Registered, 1=Verified, 2=Shipped, 3=Delivered
+              if (Number(b.stage) >= 1) verifiedCount++;
+              if (Number(b.stage) >= 2) shippedCount++;
+            }
+          } catch (_) { /* skip failed individual fetch */ }
+          await sleep(120); // ~120ms between calls → stays under typical rate limit
+        }
+
+        if (!cancelled)
+          setStats({ total, verified: verifiedCount, farmers: farmerSet.size, shipped: shippedCount });
+
+      } catch (e) {
+        console.error('Chain stats error:', e);
+        if (!cancelled) setError(true);
+      }
+    };
+    run();
+    return () => { cancelled = true; };
+  }, []);
+
+  return { stats, error };
+};
+
+/* ═══════════════════════════════════════════════════════════
+   LiveStats component — reads real on-chain data
+═══════════════════════════════════════════════════════════ */
+const LiveStats = ({ chainStats, chainError }) => {
+  // Accept pre-fetched stats from parent, or fetch internally as fallback
+  const internal = useChainStats();
+  const stats = chainStats !== undefined ? chainStats : internal.stats;
+  const error = chainError !== undefined ? chainError : internal.error;
+  const loading = stats === null && !error;
+
+  const items = [
+    {
+      emoji: '🌿',
+      target: stats?.total ?? 0,
+      suffix: '',
+      label: 'Batches Registered',
+      sub: 'Total herb batches created on-chain',
+      cls: 'lp-stat-green', barCls: '', fillCls: '',
+    },
+    {
+      emoji: '🔬',
+      target: stats?.verified ?? 0,
+      suffix: '',
+      label: 'Lab Verified',
+      sub: 'Batches that passed lab verification',
+      cls: 'lp-stat-purple', barCls: 'lp-bar-purple', fillCls: 'lp-fill-purple',
+    },
+    {
+      emoji: '👨‍🌾',
+      target: stats?.farmers ?? 0,
+      suffix: '',
+      label: 'Unique Farmers',
+      sub: 'Distinct wallet addresses that registered batches',
+      cls: 'lp-stat-gold', barCls: 'lp-bar-gold', fillCls: 'lp-fill-gold',
+    },
+    {
+      emoji: '🚚',
+      target: stats?.shipped ?? 0,
+      suffix: '',
+      label: 'Batches Shipped',
+      sub: 'Verified batches dispatched by distributors',
+      cls: 'lp-stat-teal', barCls: 'lp-bar-teal', fillCls: 'lp-fill-teal',
+    },
+  ];
+
+  return (
+    <section className="lp-stats" id="impact">
+      <div className="lp-container">
+        <div className="lp-section-header">
+          <p className="lp-section-tag lp-reveal">Live On-Chain Data</p>
+          <h2 className="lp-section-title lp-reveal">
+            Numbers That <span className="lp-text-gradient">Speak</span>
+          </h2>
+          <p className="lp-section-desc lp-reveal" style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>
+            {loading ? 'Fetching live data from Ethereum Sepolia…'
+              : error ? 'Could not reach Sepolia RPC — figures may be unavailable'
+                : `Live data · Contract ${import.meta.env.VITE_CONTRACT_ADDRESS ?? '0x437B…93e1'} · Sepolia testnet`}
+          </p>
         </div>
+        <div className="lp-stats-grid">
+          {items.map(({ emoji, target, suffix, label, cls, barCls, fillCls }) => (
+            <StatCard
+              key={label}
+              emoji={emoji}
+              target={target}
+              suffix={suffix}
+              label={label}
+              cls={cls}
+              barCls={barCls}
+              fillCls={fillCls}
+              loading={loading}
+            />
+          ))}
+        </div>
+        {error && (
+          <p style={{ textAlign: 'center', marginTop: '1.5rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+            ⚠️ Could not reach Sepolia RPC. Please check your connection.
+          </p>
+        )}
       </div>
     </section>
+  );
+};
 
-    {/* ── Portals ──────────────────────────────────────────────── */}
-    <section className="max-w-6xl mx-auto px-6 py-16">
-      <div className="mb-10">
-        <p className="text-xs font-semibold text-stone-400 uppercase tracking-widest mb-2">Portals</p>
-        <h2 className="text-2xl font-bold text-stone-900">Four roles, one shared ledger</h2>
-        <p className="text-stone-500 text-sm mt-1 max-w-xl">
-          Each portal is a separate interface for a different participant in the supply chain.
-          All data is read from and written to the same smart contract.
-        </p>
-      </div>
+/* ═══════════════════════════════════════════════════════════
+   Scroll reveal hook
+═══════════════════════════════════════════════════════════ */
+const useReveal = () => {
+  useEffect(() => {
+    const els = document.querySelectorAll('.lp-reveal');
+    const observer = new IntersectionObserver(
+      (entries) => entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('active'); }),
+      { threshold: 0.12 }
+    );
+    els.forEach(el => observer.observe(el));
+    return () => observer.disconnect();
+  }, []);
+};
 
-      <div className="grid md:grid-cols-2 gap-5">
-        {PORTALS.map(({ to, icon: Icon, label, desc, accent, cta, ctaCls }) => (
-          <div key={to} className="bg-white rounded-2xl border border-stone-100 p-6 flex flex-col hover:border-stone-200 hover:shadow-sm transition-all">
-            <div className={`inline-flex items-center gap-2 text-sm font-semibold px-3 py-1.5 rounded-xl border w-fit mb-4 ${accent}`}>
-              <Icon size={15} /> {label}
-            </div>
-            <p className="text-sm text-stone-500 leading-relaxed flex-1 mb-5">{desc}</p>
-            <Link to={to}
-              className={`inline-flex items-center gap-2 self-start text-sm font-semibold px-4 py-2 rounded-xl transition ${ctaCls}`}>
-              {cta} <ArrowRight size={14} />
+/* ═══════════════════════════════════════════════════════════
+   Timeline progress
+═══════════════════════════════════════════════════════════ */
+const TimelineProgress = () => {
+  const ref = useRef(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const onScroll = () => {
+      const rect = el.closest('.lp-timeline')?.getBoundingClientRect();
+      if (!rect) return;
+      const visible = Math.max(0, Math.min(1, (window.innerHeight - rect.top) / rect.height));
+      el.style.width = `${visible * 100}%`;
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+  return <div ref={ref} className="lp-timeline-progress" />;
+};
+
+/* ═══════════════════════════════════════════════════════════
+   HOME PAGE
+═══════════════════════════════════════════════════════════ */
+const Home = () => {
+  useReveal();
+  // Fetch on-chain stats once and share with both hero strip and LiveStats
+  const { stats: chainStats, error: chainError } = useChainStats();
+  const heroTotal = chainStats ? chainStats.total : null;
+  const heroVerified = chainStats ? chainStats.verified : null;
+  const heroFarmers = chainStats ? chainStats.farmers : null;
+
+  return (
+    <div className="lp-root">
+      <FontLoader />
+
+      {/* ── HERO ─────────────────────────────────────────── */}
+      <section className="lp-hero" id="hero">
+        <HeroCanvas />
+        <div className="lp-hero-bg-image" style={{ backgroundImage: `url(${herbHeroBg})` }} />
+        <div className="lp-hero-overlay" />
+        <div className="lp-hero-grid" />
+
+        {/* Ambient orbs */}
+        <div className="lp-ambient-orbs" aria-hidden="true">
+          <div className="lp-orb lp-orb-1" />
+          <div className="lp-orb lp-orb-2" />
+          <div className="lp-orb lp-orb-3" />
+          <div className="lp-orb lp-orb-4" />
+        </div>
+
+        <div className="lp-hero-content">
+          <div className="lp-hero-badge lp-reveal">
+            <div className="lp-badge-dot" />
+            <span>Powered by Ethereum Blockchain</span>
+          </div>
+
+          <h1 className="lp-hero-title lp-reveal">
+            <span className="lp-hero-line">Traceability</span>
+            <span className="lp-hero-line">
+              You Can <span className="lp-shimmer-text">Trust.</span>
+            </span>
+          </h1>
+
+          <p className="lp-hero-subtitle lp-reveal">
+            HerbChain brings end-to-end transparency to herbal supply chains — from seed to shelf — secured on an
+            immutable blockchain ledger.
+          </p>
+
+          <div className="lp-hero-buttons lp-reveal">
+            <Link to="/farmer" className="lp-btn lp-btn-primary lp-btn-lg">
+              <span>Explore Features</span>
+              <div className="lp-btn-glow" />
+            </Link>
+            <Link to="/track" className="lp-btn lp-btn-glass lp-btn-lg">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polygon points="5 3 19 12 5 21 5 3" />
+              </svg>
+              <span>Track a Batch</span>
             </Link>
           </div>
-        ))}
-      </div>
-    </section>
 
-    {/* ── How it works ─────────────────────────────────────────── */}
-    <section className="border-t border-stone-100 bg-stone-50">
-      <div className="max-w-6xl mx-auto px-6 py-16">
-        <div className="mb-10">
-          <p className="text-xs font-semibold text-stone-400 uppercase tracking-widest mb-2">Workflow</p>
-          <h2 className="text-2xl font-bold text-stone-900">How a batch moves through the system</h2>
-        </div>
-
-        <div className="grid md:grid-cols-4 gap-4">
-          {[
-            {
-              step: '01',
-              title: 'Farmer registers batch',
-              body: 'Uploads a crop photo (stored on IPFS), enters harvest location and date, and calls createBatch() on the smart contract.',
-            },
-            {
-              step: '02',
-              title: 'Lab analyses sample',
-              body: 'A lab technician records purity %, analysis notes, and optionally a PDF report CID by calling verifyBatch(), advancing the stage on-chain.',
-            },
-            {
-              step: '03',
-              title: 'Distributor dispatches',
-              body: 'Once lab-verified, the distributor marks the batch as shipped via updateStage(), updating the on-chain status to "Shipped".',
-            },
-            {
-              step: '04',
-              title: 'Anyone can verify',
-              body: 'Scan the QR code or enter a batch ID on the Track page to read all on-chain data — no wallet or login required.',
-            },
-          ].map(({ step, title, body }) => (
-            <div key={step} className="bg-white rounded-2xl border border-stone-100 p-5">
-              <div className="text-3xl font-black text-stone-100 mb-3 select-none">{step}</div>
-              <h3 className="text-sm font-semibold text-stone-800 mb-2">{title}</h3>
-              <p className="text-xs text-stone-500 leading-relaxed">{body}</p>
+          <div className="lp-hero-metrics lp-reveal">
+            <div className="lp-hero-metric">
+              <strong>{heroTotal !== null ? heroTotal : '—'}</strong>
+              <span>Batches Registered</span>
             </div>
-          ))}
-        </div>
-      </div>
-    </section>
-
-    {/* ── Tech stack ───────────────────────────────────────────── */}
-    <section className="border-t border-stone-100 bg-white">
-      <div className="max-w-6xl mx-auto px-6 py-12">
-        <p className="text-xs font-semibold text-stone-400 uppercase tracking-widest mb-8">Technology stack</p>
-        <div className="grid md:grid-cols-3 gap-6">
-          {TECH.map(({ icon: Icon, label, sub }) => (
-            <div key={label} className="flex gap-4 items-start">
-              <div className="p-2 bg-stone-50 border border-stone-100 rounded-xl flex-shrink-0">
-                <Icon size={18} className="text-stone-500" />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-stone-800">{label}</p>
-                <p className="text-xs text-stone-400 mt-0.5 leading-relaxed">{sub}</p>
-              </div>
+            <div className="lp-hero-metric-divider" />
+            <div className="lp-hero-metric">
+              <strong>{heroVerified !== null ? heroVerified : '—'}</strong>
+              <span>Lab Verified</span>
             </div>
-          ))}
-        </div>
-      </div>
-    </section>
-
-    {/* ── Footer ───────────────────────────────────────────────── */}
-    <footer className="border-t border-stone-100 bg-stone-50">
-      <div className="max-w-6xl mx-auto px-6 py-6 flex flex-col md:flex-row items-center justify-between gap-3 text-xs text-stone-400">
-        <div className="flex items-center gap-2">
-          <div className="w-5 h-5 bg-green-700 rounded-md flex items-center justify-center">
-            <Leaf size={11} className="text-white" />
+            <div className="lp-hero-metric-divider" />
+            <div className="lp-hero-metric">
+              <strong>{heroFarmers !== null ? heroFarmers : '—'}</strong>
+              <span>Unique Farmers</span>
+            </div>
           </div>
-          <span className="font-medium text-stone-500">HerbTrace</span>
-          <span>· Prototype / Academic project</span>
         </div>
-        <div className="flex items-center gap-4">
-          <span>Smart contract on Ethereum Sepolia testnet</span>
-          <span>·</span>
-          <span>No production use · No real transactions</span>
+
+        <div className="lp-scroll-indicator">
+          <div className="lp-scroll-line" />
         </div>
-      </div>
-    </footer>
+      </section>
 
-  </div>
-);
+      {/* ── TRUSTED BY ───────────────────────────────────── */}
+      <section className="lp-trusted" id="trusted">
+        <div className="lp-container">
+          <p className="lp-trusted-label lp-reveal">Trusted by industry partners</p>
+          <div className="lp-trusted-logos lp-reveal">
+            {['🏛️ AyurGov India', '🌍 Global Herb Alliance', '🔬 BioLab International', '🏥 MediTrace', '🌱 PureLeaf Organics'].map(p => (
+              <div key={p} className="lp-trusted-logo">{p}</div>
+            ))}
+          </div>
+        </div>
+      </section>
 
+      {/* ── FEATURES ─────────────────────────────────────── */}
+      <section className="lp-features" id="features">
+        <div className="lp-container">
+          <div className="lp-section-header">
+            <p className="lp-section-tag lp-reveal">Core Ecosystem</p>
+            <h2 className="lp-section-title lp-reveal">
+              Features Built for <span className="lp-text-gradient">Integrity</span>
+            </h2>
+            <p className="lp-section-desc lp-reveal">
+              Every component designed to ensure verifiable trust across the entire herbal supply chain.
+            </p>
+          </div>
+
+          <div className="lp-features-grid">
+            {[
+              { emoji: '🔗', cls: 'lp-card-green', iconCls: '', ringCls: '', glowCls: '', tag: 'green', tagLabel: 'Core', title: 'Full Traceability', desc: 'Track every herb batch from farm cultivation through processing, packaging, and retail distribution — all on-chain.' },
+              { emoji: '🔍', cls: 'lp-card-purple', iconCls: 'lp-icon-purple', ringCls: 'lp-ring-purple', glowCls: 'lp-glow-purple', tag: 'purple', tagLabel: 'Visibility', title: 'Radical Transparency', desc: 'Every participant in the supply chain can verify the origin, handling, and quality of products in real time.' },
+              { emoji: '📜', cls: 'lp-card-gold', iconCls: 'lp-icon-gold', ringCls: 'lp-ring-gold', glowCls: 'lp-glow-gold', tag: 'gold', tagLabel: 'Automation', title: 'Smart Contracts', desc: 'Automated compliance checks and role-based access control ensure tamper-proof operations at every stage.', popular: true },
+              { emoji: '🧪', cls: 'lp-card-teal', iconCls: 'lp-icon-teal', ringCls: 'lp-ring-teal', glowCls: 'lp-glow-teal', tag: 'teal', tagLabel: 'Verification', title: 'Lab Verified', desc: 'On-chain lab reports provide immutable proof of quality, safety, and authenticity for every batch.' },
+            ].map(({ emoji, cls, iconCls, ringCls, glowCls, tag, tagLabel, title, desc, popular }) => (
+              <div key={title} className={`lp-feature-card ${cls} lp-reveal`}>
+                <div className={`lp-card-border-glow ${glowCls}`} />
+                {popular && <div className="lp-popular-badge">⭐ Popular</div>}
+                <div className="lp-feature-icon-wrap">
+                  <div className={`lp-feature-icon ${iconCls}`}>{emoji}</div>
+                  <div className={`lp-icon-ring ${ringCls}`} />
+                </div>
+                <h3>{title}</h3>
+                <p>{desc}</p>
+                <div className={`lp-feature-tag ${tag}`}>{tagLabel}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── HOW IT WORKS ─────────────────────────────────── */}
+      <section className="lp-how" id="how-it-works">
+        <div className="lp-container">
+          <div className="lp-section-header">
+            <p className="lp-section-tag lp-reveal">The Journey</p>
+            <h2 className="lp-section-title lp-reveal">
+              From Seed to <span className="lp-text-gradient">Shelf</span>
+            </h2>
+            <p className="lp-section-desc lp-reveal">
+              A seamless four-step journey ensuring every herb's story is told with integrity.
+            </p>
+          </div>
+
+          <div className="lp-timeline">
+            <div className="lp-timeline-track">
+              <TimelineProgress />
+            </div>
+            <div className="lp-timeline-steps">
+              {[
+                { icon: '🌱', num: 'Step 01', title: 'Farm Registration', desc: "Farmers register each batch with origin details, organic certifications, and harvest data." },
+                { icon: '🏭', num: 'Step 02', title: 'Processing & QC', desc: 'Processors record handling steps while quality control checks are logged immutably.' },
+                { icon: '🔬', num: 'Step 03', title: 'Lab Certification', desc: 'Independent labs submit tamper-proof test results and safety certifications on-chain.' },
+                { icon: '📱', num: 'Step 04', title: 'Consumer Scan', desc: "End consumers scan a QR code to see the complete verified journey of their product." },
+              ].map(({ icon, num, title, desc }) => (
+                <div key={num} className="lp-timeline-step lp-reveal">
+                  <div className="lp-step-dot">
+                    <div className="lp-step-dot-inner" />
+                    <div className="lp-step-dot-pulse" />
+                  </div>
+                  <div className="lp-step-content">
+                    <div className="lp-step-number">{num}</div>
+                    <div className="lp-step-icon-card">{icon}</div>
+                    <h3>{title}</h3>
+                    <p>{desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── STATS ────────────────────────────────────────── */}
+      <LiveStats chainStats={chainStats} chainError={chainError} />
+
+      {/* ── TECH STACK ───────────────────────────────────── */}
+      <section className="lp-tech" id="technology">
+        <div className="lp-container">
+          <div className="lp-section-header">
+            <p className="lp-section-tag lp-reveal">Under the Hood</p>
+            <h2 className="lp-section-title lp-reveal">
+              Built With <span className="lp-text-gradient">Best-in-Class</span> Tech
+            </h2>
+            <p className="lp-section-desc lp-reveal">
+              A robust technology stack designed for security, scalability, and speed.
+            </p>
+          </div>
+          <div className="lp-tech-grid">
+            {[
+              { logo: '⟠', cls: 'lp-ti-green', tag: 'green', tagLabel: 'Smart Contracts', title: 'Solidity', desc: 'Smart contracts governing batch lifecycle, access roles, and compliance logic.' },
+              { logo: '⬡', cls: 'lp-ti-purple', tag: 'purple', tagLabel: 'Blockchain', title: 'Ethereum', desc: 'Decentralised, battle-tested blockchain securing all supply chain records.' },
+              { logo: '⚛️', cls: 'lp-ti-teal', tag: 'teal', tagLabel: 'Frontend', title: 'React', desc: 'Modern, responsive front-end powering dashboards for every supply chain role.' },
+              { logo: '◆', cls: 'lp-ti-gold', tag: 'gold', tagLabel: 'Storage', title: 'IPFS', desc: 'Distributed file storage for lab reports, certificates, and batch documentation.' },
+            ].map(({ logo, cls, tag, tagLabel, title, desc }) => (
+              <div key={title} className="lp-tech-card lp-reveal">
+                <div className={`lp-tech-card-inner ${cls}`}>
+                  <div className="lp-tech-logo-wrap">
+                    <div className="lp-tech-logo">{logo}</div>
+                  </div>
+                  <h3>{title}</h3>
+                  <p>{desc}</p>
+                  <div className={`lp-tech-tag ${tag}`}>{tagLabel}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── TESTIMONIAL ──────────────────────────────────── */}
+      <section className="lp-testimonial" id="testimonial">
+        <div className="lp-container">
+          <div className="lp-testimonial-card lp-reveal">
+            <div className="lp-testimonial-quote">"</div>
+            <blockquote>
+              HerbChain has completely transformed how we track our supply chain. The on-chain lab reports give our
+              customers real confidence in our products. It's the future of herbal product integrity.
+            </blockquote>
+            <div className="lp-testimonial-author">
+              <div className="lp-author-avatar">RS</div>
+              <div className="lp-author-info">
+                <strong>Dr. Rajesh Sharma</strong>
+                <span>Director, AyurVeda Research Institute</span>
+              </div>
+            </div>
+            <div className="lp-testimonial-stars">★★★★★</div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── CTA ──────────────────────────────────────────── */}
+      <section className="lp-cta-section" id="cta">
+        <div className="lp-container">
+          <div className="lp-cta-card lp-reveal">
+            <div className="lp-cta-bg-pattern" />
+            <div className="lp-cta-content">
+              <div className="lp-cta-icon">🌿</div>
+              <h2>Ready to Build Trust<br />in Your Supply Chain?</h2>
+              <p>
+                Join organizations using HerbChain to ensure transparency, quality, and authenticity
+                across every step of the herbal supply chain.
+              </p>
+              <div className="lp-cta-buttons">
+                <Link to="/farmer" className="lp-btn lp-btn-primary lp-btn-lg">
+                  <span>Register a Batch</span>
+                  <div className="lp-btn-glow" />
+                </Link>
+                <Link to="/track" className="lp-btn lp-btn-glass lp-btn-lg">
+                  <span>Track a Product</span>
+                </Link>
+              </div>
+              <p className="lp-cta-note">Academic prototype · Ethereum Sepolia testnet · No real transactions</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── FOOTER ───────────────────────────────────────── */}
+      <footer className="lp-footer" id="footer">
+        <div className="lp-container">
+          <div className="lp-footer-grid">
+            <div className="lp-footer-brand">
+              <div className="lp-footer-logo-row">
+                <div className="lp-footer-logo-icon">🌿</div>
+                Herb<span style={{ color: 'var(--green-mid)' }}>Chain</span>
+              </div>
+              <p>Building trust in herbal supply chains through blockchain transparency. Every herb, verified. Every step, recorded.</p>
+              <div className="lp-footer-socials">
+                <a href="#" className="lp-social-link" aria-label="GitHub">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
+                  </svg>
+                </a>
+                <a href="#" className="lp-social-link" aria-label="Twitter">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                  </svg>
+                </a>
+              </div>
+            </div>
+            <div className="lp-footer-links">
+              <h4>Product</h4>
+              <ul>
+                <li><a href="#features">Features</a></li>
+                <li><a href="#how-it-works">How It Works</a></li>
+                <li><Link to="/farmer">Farmer Portal</Link></li>
+                <li><Link to="/lab">Lab Portal</Link></li>
+              </ul>
+            </div>
+            <div className="lp-footer-links">
+              <h4>Portals</h4>
+              <ul>
+                <li><Link to="/farmer">Farmer</Link></li>
+                <li><Link to="/lab">Lab</Link></li>
+                <li><Link to="/distributor">Distributor</Link></li>
+                <li><Link to="/track">Track</Link></li>
+              </ul>
+            </div>
+            <div className="lp-footer-links">
+              <h4>Technology</h4>
+              <ul>
+                <li><a href="#technology">Solidity</a></li>
+                <li><a href="#technology">Ethereum</a></li>
+                <li><a href="#technology">IPFS</a></li>
+                <li><a href="#technology">React</a></li>
+              </ul>
+            </div>
+          </div>
+          <div className="lp-footer-bottom">
+            <p>© 2026 HerbChain · Academic Prototype · Ethereum Sepolia testnet</p>
+            <div className="lp-footer-bottom-links">
+              <a href="#">No real transactions</a>
+              <a href="#">No production use</a>
+            </div>
+          </div>
+        </div>
+      </footer>
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════
+   APP
+═══════════════════════════════════════════════════════════ */
 function App() {
   return (
     <Router>
